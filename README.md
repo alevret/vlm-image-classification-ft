@@ -34,7 +34,7 @@ requirements.txt
 
 | Model | Mean Accuracy | Δ vs Base |
 |-------|---------------|----------|
-| Base (zero-shot) | 73.67% | — |
+| Base `gpt-4o-2024-08-06` (zero-shot) | 73.67% | — |
 | Fine-tuned | 82.67% | +9.00 pp |
 
 <img title="Accuracy comparison" alt="accuracy_base_vs_ft_models" src="public/accuracy_base_vs_ft_models.png" width="700">
