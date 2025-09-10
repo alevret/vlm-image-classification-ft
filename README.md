@@ -106,7 +106,7 @@ Batch pricing (base model):
 Test set (600 images):
 * System prompt tokens: 494
 * Image tokens (detail=low): 85 / image
-* Output: 1–4 tokens (label) → negligible
+* Output: ≈6 tokens (label)
 * Approx input tokens cost recorded: $0.56; output: $0.03 → Total ≈ $0.59 (~$0.00098/image)
 
 ### Fine-Tuning Costs
@@ -115,7 +115,7 @@ Components:
 * Hosting (hourly) while deployment is active
 * Inference (per 1M tokens) post-deployment
 
-Pricing (gpt-4o-2024-08-06, Sept 2025 reference):
+Pricing (gpt-4o-2024-08-06, East US 2, Sept 2025 reference):
 * Training: $27.5 / 1M training tokens
 * Hosting: $1.7 / hour
 * Inference: $2.5 / 1M input, $10 / 1M output (global standard)
@@ -131,7 +131,7 @@ Training cost ≈ 5.616 * 27.5 ≈ $155
 
 <img title="FT training cost" alt="ft_training_cost" src="public/ft_training_cost.png" width="600">
 
-> Note: you can observe a difference between the calculated cost and the screenshot above. It's because in the calculation I'm using an approximation of the output tokens that are not always the same number (based on the input). I've chosen 6 as it was the most approximate integer to represent the entire distribution.
+> Note: you can observe a small difference between the calculated cost and the cost shown in the screenshot above. It's because in the calculation I'm using an approximation of the output tokens that are not always the same number (based on the input). I've chosen 6 as it was the most approximate integer to represent the entire distribution.
 
 ### Interpreting the Trade-Off
 * +9 pp accuracy uplift
@@ -139,7 +139,9 @@ Training cost ≈ 5.616 * 27.5 ≈ $155
 * Evaluate ROI if higher accuracy materially improves downstream value (e.g., retrieval routing, tagging, filtering)
 
 ## Conclusion
-The fine-tuned model improves accuracy while remaining cost-manageable using a low-epoch LoRA-based SFT. Further gains would likely require: more images, curriculum or hard-negative mining, additional epochs, or prompt refinement. Balance marginal accuracy vs added operational cost (continuous hosting + FT maintenance).
+The fine-tuned model improves accuracy while remaining cost-manageable using a low-epoch LoRA-based SFT. 
+
+Further gains would likely require: more images, curriculum or hard-negative mining, additional epochs, or prompt refinement. Balance marginal accuracy vs added operational cost.
 
 ## Disclaimer
-Costs and pricing are illustrative and may change. Always consult current Azure OpenAI pricing before large-scale runs.
+Costs and pricing are illustrative and may change. Always consult current [Azure OpenAI pricing](https://azure.microsoft.com/en-us/pricing/details/cognitive-services/openai-service/) before large-scale runs.
