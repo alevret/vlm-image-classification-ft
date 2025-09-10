@@ -26,7 +26,8 @@ requirements.txt
 
 ### Key Features
 * Zero-shot vs fine-tuned accuracy comparison
-* Batch inference via Azure OpenAI Batch API (for base + FT model eval)
+* Batch inference via Azure OpenAI Batch API for base model evaluation
+* Vision Fine-tuning via Azure OpenAI fine-tuning API (SFT with LoRA)
 * Cost estimation methodology (training vs inference vs hosting)
 * Metrics: mean accuracy, per-class deltas, confusion analysis (see notebook)
 
@@ -92,9 +93,10 @@ Open `images_classification_base_model.ipynb` and execute cells sequentially:
 1. Imports & credentials
 2. Dataset preparation & sampling
 3. JSONL generation & upload
-4. Fine-tuning job creation & monitoring
-5. Batch inference for base + FT model
-6. Metrics, plots, confusion inspection
+4. Evaluation on base model through batch inference (not supported with fine-tuned model yet)
+5. Fine-tuning job creation & deployment
+6. Evaluation on fine-tuned model
+7. Comparison between base & fine-tuned models
 
 ## Cost Analysis
 
