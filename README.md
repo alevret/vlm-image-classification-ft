@@ -129,7 +129,7 @@ Epochs = 2 → Total = 5,616,000 tokens = 5.616M
 Training cost ≈ 5.616 * 27.5 ≈ $155
 ```
 
-<img title="FT training cost" alt="ft_training_cost" src="public/ft_training_cost.png" width="600">
+<img title="FT training cost" alt="ft_training_cost" src="public/FT_training_cost.png" width="600">
 
 > Note: you can observe a small difference between the calculated cost and the cost shown in the screenshot above. It's because in the calculation I'm using an approximation of the output tokens that are not always the same number (based on the input). I've chosen 6 as it was the most approximate integer to represent the entire distribution.
 
