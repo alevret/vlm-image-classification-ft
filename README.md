@@ -16,12 +16,14 @@ For cost control we down-sample to 50 images per breed (6,000 images total) spli
 
 ### Repository Structure (trimmed)
 ```
-jsonl/                # Train/val/test JSONL files for fine-tuning + evaluation
-public/               # Plots and illustration assets
-stanford_dogs_dataset/ # Raw images (down-sampled subset in practice)
-images_classification_base_model.ipynb  # End‑to‑end experimentation notebook
-results.csv           # Aggregated per-image predictions / metrics
-requirements.txt
+.
+├─ README.md
+├─ requirements.txt
+├─ .env.sample                              # Example env vars (copy → .env, not committed)
+├─ images_classification_base_model.ipynb   # Main training + evaluation workflow
+├─ latency_base_ft_models.ipynb             # Latency benchmarking (base vs FT)
+├─ latency_outputs/                         # Aggregated latency CSV summaries
+└─ public/                                  # Plots & illustration assets
 ```
 
 ### Key Features
