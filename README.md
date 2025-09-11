@@ -42,6 +42,42 @@ requirements.txt
 
 > The chosen `gpt-4o-2024-08-06` version (September 2025) is the only Azure model supporting both: (a) vision fine-tuning and (b) Batch API with image inputs (base model only).
 
+### Latency Evaluation (Base vs Fine-Tuned)
+
+After accuracy, we compared end-to-end per-request latency (single-threaded, sequential) over the full test set (600 images).
+
+Metrics captured per model:
+* total_requests / success_count / error_count
+* mean_ms, median_ms (p50)
+* p90_ms / p95_ms / p99_ms (tail latency)
+* min_ms / max_ms
+* std_dev_ms
+* throughput_rps_est (sequential approximation)
+
+Methodology:
+1. Reconstructed `test_df` (same deterministic sampling logic as training notebook).
+2. For each image: issued a `chat.completions.create` call with a low-detail (`detail="low"`) vision prompt.
+3. Timed from just before SDK call to response return (blocking) → end-to-end client-observed latency.
+4. Simple retry (up to 3 attempts, linear backoff) for transient 429/5xx; failures recorded separately.
+5. Visualized distributions using a histogram (per model) and a boxplot.
+
+Measured results (600 sequential requests per model):
+
+| Model | Mean (ms) | P50 (ms) | P90 (ms) | P95 (ms) | P99 (ms) | Min (ms) | Max (ms) | Throughput (req/s) |
+|-------|-----------|----------|----------|----------|----------|----------|----------|--------------------|
+| Base (`gpt-4o`) | 1665.08 | 1629.17 | 1963.85 | 2182.58 | 2737.33 | 1053.66 | 4693.65 | 0.601 |
+| Fine-tuned (`gpt-4o-2024-08-06-ft`) | 1505.97 | 1505.29 | 1706.80 | 1819.48 | 2302.56 | 824.95 | 3381.80 | 0.664 |
+
+Observations:
+* Fine-tuned model is faster on average (~9.6% lower mean latency) and shows tighter tail (p99 reduced by ~15.9%).
+* Throughput (sequential approximation) is slightly higher for the fine-tuned deployment (0.664 vs 0.601 req/s).
+* Lower min and max latencies suggest reduced variance; std dev also decreased (324.15 → 241.33 ms as seen in raw table).
+
+#### Latency Visualizations
+
+<img title="Latency Histogram" alt="latency_histogram" src="public/latency_histogram.png" width="600">  
+<img title="Latency Distribution Boxplot" alt="latency_boxplot" src="public/latency_boxplot.png" width="400">
+
 ## Why Fine-Tune?
 Zero-shot performance is strong, but fine-tuning yields a consistent uplift (+9 pp mean accuracy) and tighter per-class variance. The gain is moderate given only 2 epochs and a lightweight LoRA setup—additional epochs or data would likely improve it further (with higher cost).
 
@@ -136,9 +172,13 @@ Training cost ≈ 5.616 * 27.5 ≈ $155
 > Note: you can observe a small difference between the calculated cost and the cost shown in the screenshot above. It's because in the calculation I'm using an approximation of the output tokens that are not always the same number (based on the input). I've chosen 6 as it was the most approximate integer to represent the entire distribution.
 
 ### Interpreting the Trade-Off
-* +9 pp accuracy uplift
-* Additional hosting & training cost footprint
-* Evaluate ROI if higher accuracy materially improves downstream value (e.g., retrieval routing, tagging, filtering)
+* Accuracy: +9 pp mean accuracy uplift (73.67% → 82.67%) – materially fewer misclassifications across 120 classes.
+* Latency: Mean latency dropped ~9.6% (1665 → 1506 ms) and tail improved (p99 -15.9%, 2737 → 2303 ms). Lower variance (std dev 324 → 241 ms) means more predictable response times.
+* Throughput: Sequential effective throughput rose from 0.601 → 0.664 req/s (~10% gain); in a real concurrent setting this compounds capacity benefits.
+* User experience: Faster and tighter latency distribution reduces perceived lag and long-tail stalls; fewer outliers (max 4694 → 3382 ms).
+* Cost: Token pricing per inference is similar; incremental hosting + one‑time training cost must be amortized over projected inference volume. Latency gains may offset some cost by enabling higher sustained QPS on the same client/service budget.
+* Risk/Complexity: Fine-tuning introduces lifecycle tasks (versioning, retraining as drift occurs, monitoring). Decide if operational overhead is justified by accuracy + latency improvements for downstream workflows (routing, tagging, enrichment).
+* ROI Trigger: Fine-tune is most justified if misclassification carries downstream manual review cost or latency improvements unlock tighter SLAs.
 
 ## Conclusion
 The fine-tuned model improves accuracy while remaining cost-manageable using a low-epoch LoRA-based SFT. 
