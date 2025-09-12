@@ -79,7 +79,7 @@ This framing helps readers reason about ROI for adopting Azure OpenAI fine-tunin
 | Model | Mean Accuracy | Δ vs Base |
 |-------|---------------|----------|
 | Base `gpt-4o-2024-08-06` (zero-shot) | 73.67% | — |
-| Fine-tuned `gpt-4o-2024-08-06` | 82.67% | +9.00 pp |
+| Fine-tuned `gpt-4o-2024-08-06` | **82.67%** | **+9.00 pp** |
 | CNN Baseline (MobileNetV3-Small) | 61.67% | -12.00 pp |
 
 <img title="Accuracy comparison" alt="accuracy_base_vs_ft_models" src="public/accuracy_base_vs_ft_models.png" width="700">
