@@ -46,7 +46,7 @@ For cost control: **50 images per breed** → 6,000 images total → split 40 tr
 ├─ README.md                                # This file
 ├─ requirements.txt                         # Python dependencies (pinned)
 ├─ .env.sample                              # Environment variable template
-├─ images_classification_base_model.ipynb   # Prep + FT + evaluation
+├─ images_classification_vlm.ipynb          # Prep + FT + evaluation (renamed)
 ├─ latency_base_ft_models.ipynb             # Latency benchmarking
 ├─ cnn_baseline.py                          # Classic CV baseline
 ├─ latency_outputs/                         # Latency measurement CSVs
@@ -191,7 +191,7 @@ Minimal example (line-delimited JSON – one object per line):
 ]}
 ```
 
-### Notebook Flow (`images_classification_base_model.ipynb`)
+### Notebook Flow (`images_classification_vlm.ipynb`)
 1. Credentials & imports
 2. Dataset sampling & JSONL creation
 3. Batch evaluation (base model)
