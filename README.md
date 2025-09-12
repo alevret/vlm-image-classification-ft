@@ -1,191 +1,218 @@
 ## VLM Image Classification with Fine-Tuning
 
-This project demonstrates how to use a Vision Language Model (VLM) for multi-class image classification (120 dog breeds from the Stanford Dogs dataset), comparing: 
-1. Zero-shot classification with a base `gpt-4o-2024-08-06` deployment.  
-2. A fine-tuned vision model trained on a reduced subset of the dataset.
+This project demonstrates how to use a Vision Language Model (VLM) with **Azure OpenAI** for multi-class image classification (120 dog breeds) comparing three approaches:
+1. Zero-shot classification with a base `gpt-4o-2024-08-06` deployment
+2. A fine-tuned Azure OpenAI vision model (LoRA SFT) on a down-sampled subset
+3. A classic CNN baseline (MobileNetV3-Small) for grounding
 
 <img title="dogs" alt="dogs" src="public/dogs.png" width="400">
 
-### Dataset (Stanford Dogs)
-Original dataset stats:
+### At-a-Glance Summary
+| Aspect | Base Zero‑Shot | Fine-Tuned | CNN Baseline |
+|--------|----------------|-----------|--------------|
+| Accuracy (mean) | 73.67% | 82.67% (+9.0 pp) | 61.67% (-12.0 pp vs base) |
+| Mean Latency (ms) | 1665 | 1506 (-9.6%) | — (not benchmarked here) |
+| Tail Latency p99 (ms) | 2737 | 2303 (-15.9%) | — |
+| Hosting Cost | None (deployment cost only) | Hosting + training amortization | Local infra |
+| Adaptation | Prompt only | Task-specific | Task-specific |
+
+> The CNN baseline (MobileNetV3-Small) is included only for comparative grounding; detailed implementation is in `cnn_baseline.py` (kept concise to maintain focus on Azure OpenAI fine-tuning).
+
+### Table of Contents
+1. [Dataset](#dataset)
+2. [Repository Structure](#repository-structure)
+3. [Baselines & Experimental Setup](#baselines--experimental-setup)
+4. [Results](#results)
+5. [Latency Evaluation](#latency-evaluation)
+6. [Why Fine-Tune?](#why-fine-tune)
+7. [Cost Analysis & ROI](#cost-analysis--roi)
+8. [Reproducibility & Setup](#reproducibility--setup)
+9. [Dataset Citation & Licensing](#dataset-citation--licensing)
+10. [License](#license)
+11. [Disclaimer](#disclaimer)
+
+
+## Dataset
+Original Stanford Dogs stats:
 * 120 breeds
 * 20,580 images
-* Extra annotations (not used here)
+* Extra annotations (not used)
 
-For cost control we down-sample to 50 images per breed (6,000 images total) split as: 40 train / 5 val / 5 test per class.
+For cost control: **50 images per breed** → 6,000 images total → split 40 train / 5 val / 5 test.
 
-### Repository Structure (trimmed)
+## Repository Structure
 ```
 .
-├─ README.md
-├─ requirements.txt
-├─ .env.sample                              # Example env vars (copy → .env, not committed)
-├─ images_classification_base_model.ipynb   # Main training + evaluation workflow
-├─ latency_base_ft_models.ipynb             # Latency benchmarking (base vs FT)
-├─ latency_outputs/                         # Aggregated latency CSV summaries
-└─ public/                                  # Plots & illustration assets
+├─ README.md                                # This file
+├─ requirements.txt                         # Python dependencies (pinned)
+├─ .env.sample                              # Environment variable template
+├─ images_classification_base_model.ipynb   # Prep + FT + evaluation
+├─ latency_base_ft_models.ipynb             # Latency benchmarking
+├─ cnn_baseline.py                          # Classic CV baseline
+├─ latency_outputs/                         # Latency measurement CSVs
+└─ public/                                  # Plots & diagram assets
 ```
 
-### Key Features
-* Zero-shot vs fine-tuned accuracy comparison
-* Batch inference via Azure OpenAI Batch API for base model evaluation
-* Vision Fine-tuning via Azure OpenAI fine-tuning API (SFT with LoRA)
-* Cost estimation methodology (training vs inference vs hosting)
-* Metrics: mean accuracy, per-class deltas, confusion analysis (see notebook)
+## Baselines & Experimental Setup
+**Models Compared**
+* **Zero-shot VLM**: Azure OpenAI `gpt-4o-2024-08-06` deployed for interactive + Batch inference.
+* **Fine-tuned VLM**: Same base model, LoRA SFT over 4,800 training images (2 epochs) using chat-style JSONL with image + constrained label output.
+* **CNN Baseline**: MobileNetV3-Small (ImageNet init) fine-tuned 8 epochs. Provides grounding for how a lightweight task-specific model fares under limited per-class data.
+
+**Baseline Intent (Important Clarification)**
+The CNN baseline is deliberately lightweight and minimally tuned. Its role is purely to supply a familiar, traditional computer vision reference point—not to establish a state-of-the-art classical model. Do **not** interpret the absolute performance gap as an inherent limit of conventional CV; a stronger backbone (e.g. ConvNeXt / ViT) or deeper training schedule could narrow it. The comparison is designed to highlight how much capability you get from:
+1. A zero-shot Azure OpenAI vision model with only prompt engineering
+2. The incremental uplift gained by fine-tuning that same model
+3. A modest classic model under identical low-data constraints
+
+This framing helps readers reason about ROI for adopting Azure OpenAI fine-tuning versus investing in further classic model engineering.
+
+**Data Budget Constraint**: 40 training images per class simulates a low-data regime where pretrained multimodal priors can shine.
+
+**Evaluation Metrics**: Mean accuracy, per-class accuracy deltas (CSV), latency distribution (mean, p50, p90, p95, p99), variance, throughput approximation.
+
+**Prompt Strategy (Base)**: Constrained system prompt enumerating the 120 canonical breed tokens; single low-detail image encoding.
+
+**Fine-Tuning Format**: Chat messages with `input_text` + `input_image` and a single class label assistant response.
 
 ## Results
-
 | Model | Mean Accuracy | Δ vs Base |
 |-------|---------------|----------|
 | Base `gpt-4o-2024-08-06` (zero-shot) | 73.67% | — |
-| Fine-tuned | 82.67% | +9.00 pp |
+| Fine-tuned `gpt-4o-2024-08-06` | 82.67% | +9.00 pp |
+| CNN Baseline (MobileNetV3-Small) | 61.67% | -12.00 pp |
 
 <img title="Accuracy comparison" alt="accuracy_base_vs_ft_models" src="public/accuracy_base_vs_ft_models.png" width="700">
 
-> The chosen `gpt-4o-2024-08-06` version (September 2025) is the only Azure model supporting both: (a) vision fine-tuning and (b) Batch API with image inputs (base model only).
+**Interpretation**
+* Zero-shot already outperforms a lightweight task-specific CNN (+12 pp) → strong semantic prior.
+* Fine-tuning compounds gains (+9 pp further) with only 2 epochs.
+* CNN underperformance largely attributable to limited per-class diversity and modest backbone capacity.
 
-### Latency Evaluation (Base vs Fine-Tuned)
+## Latency Evaluation
+End-to-end client-observed latency over 600 sequential requests per model.
 
-After accuracy, we compared end-to-end per-request latency (single-threaded, sequential) over the full test set (600 images).
-
-Metrics captured per model:
-* total_requests / success_count / error_count
-* mean_ms, median_ms (p50)
-* p90_ms / p95_ms / p99_ms (tail latency)
-* min_ms / max_ms
-* std_dev_ms
-* throughput_rps_est (sequential approximation)
-
-Methodology:
-1. Reconstructed `test_df` (same deterministic sampling logic as training notebook).
-2. For each image: issued a `chat.completions.create` call with a low-detail (`detail="low"`) vision prompt.
-3. Timed from just before SDK call to response return (blocking) → end-to-end client-observed latency.
-4. Simple retry (up to 3 attempts, linear backoff) for transient 429/5xx; failures recorded separately.
-5. Visualized distributions using a histogram (per model) and a boxplot.
-
-Measured results (600 sequential requests per model):
-
-| Model | Mean (ms) | P50 (ms) | P90 (ms) | P95 (ms) | P99 (ms) | Min (ms) | Max (ms) | Throughput (req/s) |
-|-------|-----------|----------|----------|----------|----------|----------|----------|--------------------|
-| Base (`gpt-4o`) | 1665.08 | 1629.17 | 1963.85 | 2182.58 | 2737.33 | 1053.66 | 4693.65 | 0.601 |
+| Model | Mean (ms) | P50 | P90 | P95 | P99 | Min | Max | Throughput (req/s) |
+|-------|-----------|-----|-----|-----|-----|-----|-----|--------------------|
+| Base (`gpt-4o-2024-08-06`) | 1665.08 | 1629.17 | 1963.85 | 2182.58 | 2737.33 | 1053.66 | 4693.65 | 0.601 |
 | Fine-tuned (`gpt-4o-2024-08-06-ft`) | 1505.97 | 1505.29 | 1706.80 | 1819.48 | 2302.56 | 824.95 | 3381.80 | 0.664 |
 
-Observations:
-* Fine-tuned model is faster on average (~9.6% lower mean latency) and shows tighter tail (p99 reduced by ~15.9%).
-* Throughput (sequential approximation) is slightly higher for the fine-tuned deployment (0.664 vs 0.601 req/s).
-* Lower min and max latencies suggest reduced variance; std dev also decreased (324.15 → 241.33 ms as seen in raw table).
-
-#### Latency Visualizations
+**Observations**
+* Mean latency ↓ ~9.6%; p99 tail ↓ ~15.9% → tighter distribution.
+* Slight throughput gain (sequential proxy) from reduced variance.
+* Variance (std dev) shrinks (324 → 241 ms) improving predictability.
 
 <img title="Latency Histogram" alt="latency_histogram" src="public/latency_histogram.png" width="600">  
 <img title="Latency Distribution Boxplot" alt="latency_boxplot" src="public/latency_boxplot.png" width="400">
 
 ## Why Fine-Tune?
-Zero-shot performance is strong, but fine-tuning yields a consistent uplift (+9 pp mean accuracy) and tighter per-class variance. The gain is moderate given only 2 epochs and a lightweight LoRA setup—additional epochs or data would likely improve it further (with higher cost).
+Fine-tuning delivers accuracy uplift, tighter latency distribution, and more stable per-class performance. Even modest SFT (2 epochs) yields tangible ROI in a constrained data regime. Additional epochs or richer prompts likely increase gains (at added cost).
+
+## Cost Analysis & ROI
+### Batch Inference (Base Model)
+Pricing (Azure OpenAI reference): Input $1.25 / 1M tokens, Output $5 / 1M tokens.
+
+Test Set (600 images):
+* System prompt tokens ≈ 494
+* Image tokens (detail=low) ≈ 85 per image
+* Output ≈ 6 tokens
+* Approx total cost ≈ $0.59 (≈ $0.00098 / image)
+
+### Fine-Tuning Costs (`gpt-4o-2024-08-06` East US 2, Sept 2025)
+* Training: $27.5 / 1M training tokens
+* Hosting: $1.7 / hour (while deployed)
+* Inference: $2.5 / 1M input; $10 / 1M output
+
+Token Accounting (2 epochs, 4,800 examples):
+```
+Per example ≈ 494 (system) + 85 (image) + 6 (target) = 585
+Tokens / epoch = 585 * 4,800 = 2,808,000
+Total (2 epochs) = 5,616,000 ≈ 5.616M
+Training cost ≈ 5.616 * 27.5 = $155
+```
+<img title="FT training cost" alt="ft_training_cost" src="public/FT_training_cost.png" width="600">
+
+> Small discrepancy vs screenshot due to approximate label token count distribution.
+
+### Trade-Off Interpretation
+* **Accuracy Benefit**: +9 pp reduces misclassifications across 120 labels.
+* **Latency Advantage**: Lower and tighter tail → better UX & capacity planning.
+* **Operational Overhead**: Requires monitoring, possible periodic retraining.
+* **ROI Heuristic**: `(Added Correct Predictions * Value per Correct) > (Training + Amortized Hosting)` → proceed with FT.
 
 ## Reproducibility & Setup
-
 ### Prerequisites
-* Azure OpenAI resource (with access to vision & fine-tuning features)
+* Azure OpenAI resource (vision + fine-tuning access)
 * Python 3.10+
-* (Optional) Kaggle account if re-downloading the dataset
+* (Optional) Kaggle account to fetch dataset
 
 ### Environment
 ```
 python -m venv .venv
-./.venv/Scripts/Activate.ps1   # (Windows PowerShell)
+./.venv/Scripts/Activate.ps1   # Windows PowerShell
 pip install -r requirements.txt
 ```
 
-Create a `.env` file (not committed) with:
+### Environment Variables (`.env`)
 ```
-AZURE_OPENAI_ENDPOINT= https://<your-resource>.openai.azure.com
-AZURE_OPENAI_API_KEY= <key>
-AZURE_OPENAI_API_VERSION=2024-08-01-preview
-BASE_MODEL_DEPLOYMENT=gpt-4o-2024-08-06
-# Fill after job completion:
-FT_DEPLOYMENT=<your-ft-deployment-name>
+AZURE_OPENAI_API_KEY="<key>"
+AZURE_OPENAI_ENDPOINT="https://<your-resource>.openai.azure.com/"
+AZURE_OPENAI_API_VERSION="2025-04-01-preview"
+
+# Base interactive deployment
+AZURE_OPENAI_DEPLOYMENT_NAME="gpt-4o-2024-08-06"
+AZURE_OPENAI_DEPLOYMENT_NAME_MODEL_VERSION="2024-08-06"
+
+# Batch deployment (if separate)
+AZURE_OPENAI_BATCH_DEPLOYMENT_NAME="gpt-4o-2024-08-06"
+AZURE_OPENAI_BATCH_DEPLOYMENT_NAME_MODEL_VERSION="2024-08-06"
+
+# Fine-tuned deployment (after job completion)
+AZURE_OPENAI_FT_DEPLOYMENT_NAME="<your-finetuned-deployment-name>"
 ```
 
-### Dataset Down-Sampling (Concept)
-1. List breeds and shuffle deterministically (seed=42)
-2. Pick first 50 images per breed
-3. Split 40/5/5 into train/val/test
-4. Persist splits into `jsonl/*` for fine-tuning & evaluation
+### Dataset Down-Sampling Logic
+1. Enumerate breeds (deterministic ordering)
+2. Take first 50 images per breed
+3. Split 40 / 5 / 5 (train / val / test)
+4. Emit JSONL for fine-tuning + evaluation
 
-### JSONL Format for Vision Fine-Tuning
-Each line is a chat-style object. Example (simplified):
+### JSONL Schema (Azure OpenAI Vision FT)
+The fine-tuning JSONL uses standard chat format with a single image per example and a single-label textual response. (Matches `jsonl/train_classification.jsonl`, `val_classification.jsonl`, etc.)
+
+Minimal example (line-delimited JSON – one object per line):
 ```
 {"messages": [
-    {"role": "system", "content": "You are a dog breed classifier. Respond with exactly one of: <CLASS LIST>"},
+    {"role": "system", "content": "Classify the following input image into one of the following categories: [Affenpinscher, Afghan Hound, ... , Yorkshire Terrier]."},
     {"role": "user", "content": [
-         {"type": "input_text", "text": "Classify the dog breed."},
-         {"type": "input_image", "image_url": {"url": "https://.../image.jpg"}}
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,<BASE64_BYTES>", "detail": "low"}}
     ]},
-    {"role": "assistant", "content": [{"type": "output_text", "text": "golden_retriever"}]}
+    {"role": "assistant", "content": "Springer Spaniel"}
 ]}
 ```
 
-### Running the Notebook
-Open `images_classification_base_model.ipynb` and execute cells sequentially: 
-1. Imports & credentials
-2. Dataset preparation & sampling
-3. JSONL generation & upload
-4. Evaluation on base model through batch inference (not supported with fine-tuned model yet)
-5. Fine-tuning job creation & deployment
-6. Evaluation on fine-tuned model
-7. Comparison between base & fine-tuned models
+### Notebook Flow (`images_classification_base_model.ipynb`)
+1. Credentials & imports
+2. Dataset sampling & JSONL creation
+3. Batch evaluation (base model)
+4. Fine-tuning job creation & deployment
+5. Fine-tuned evaluation
+6. Latency benchmarking (separate notebook)
+7. Comparative summary
 
-## Cost Analysis
+## Dataset Citation & Licensing
+**Stanford Dogs Dataset**: Aditya Khosla, Nityananda Jayadevaprakash, Bangpeng Yao and Li Fei-Fei. *Novel Dataset for Fine-Grained Image Categorization.* FGVC Workshop, CVPR 2011.  
+Source: http://vision.stanford.edu/aditya86/ImageNetDogs/ (Derived from ImageNet; original image licenses apply).  
+Raw images are excluded from this repository; only directory structure references are used.
 
-### Batch Inference
-Batch pricing (base model):
-* Input: $1.25 / 1M tokens
-* Output: $5 / 1M tokens
+Please ensure compliance with the dataset’s original terms when downloading or redistributing.
 
-Test set (600 images):
-* System prompt tokens: 494
-* Image tokens (detail=low): 85 / image
-* Output: ≈6 tokens (label)
-* Approx input tokens cost recorded: $0.56; output: $0.03 → Total ≈ $0.59 (~$0.00098/image)
-
-### Fine-Tuning Costs
-Components:
-* One-time training job (token-based)
-* Hosting (hourly) while deployment is active
-* Inference (per 1M tokens) post-deployment
-
-Pricing (gpt-4o-2024-08-06, East US 2, Sept 2025 reference):
-* Training: $27.5 / 1M training tokens
-* Hosting: $1.7 / hour
-* Inference: $2.5 / 1M input, $10 / 1M output (global standard)
-
-Training token calculation (2 epochs, 4,800 training images):
-```
-Per example tokens ≈ system (494) + image (85) + target (≈6) = 585
-Examples per epoch = 40 * 120 = 4,800
-Tokens per epoch = 585 * 4,800 = 2,808,000
-Epochs = 2 → Total = 5,616,000 tokens = 5.616M
-Training cost ≈ 5.616 * 27.5 ≈ $155
-```
-
-<img title="FT training cost" alt="ft_training_cost" src="public/FT_training_cost.png" width="600">
-
-> Note: you can observe a small difference between the calculated cost and the cost shown in the screenshot above. It's because in the calculation I'm using an approximation of the output tokens that are not always the same number (based on the input). I've chosen 6 as it was the most approximate integer to represent the entire distribution.
-
-### Interpreting the Trade-Off
-* Accuracy: +9 pp mean accuracy uplift (73.67% → 82.67%) – materially fewer misclassifications across 120 classes.
-* Latency: Mean latency dropped ~9.6% (1665 → 1506 ms) and tail improved (p99 -15.9%, 2737 → 2303 ms). Lower variance (std dev 324 → 241 ms) means more predictable response times.
-* Throughput: Sequential effective throughput rose from 0.601 → 0.664 req/s (~10% gain); in a real concurrent setting this compounds capacity benefits.
-* User experience: Faster and tighter latency distribution reduces perceived lag and long-tail stalls; fewer outliers (max 4694 → 3382 ms).
-* Cost: Token pricing per inference is similar; incremental hosting + one‑time training cost must be amortized over projected inference volume. Latency gains may offset some cost by enabling higher sustained QPS on the same client/service budget.
-* Risk/Complexity: Fine-tuning introduces lifecycle tasks (versioning, retraining as drift occurs, monitoring). Decide if operational overhead is justified by accuracy + latency improvements for downstream workflows (routing, tagging, enrichment).
-* ROI Trigger: Fine-tune is most justified if misclassification carries downstream manual review cost or latency improvements unlock tighter SLAs.
-
-## Conclusion
-The fine-tuned model improves accuracy while remaining cost-manageable using a low-epoch LoRA-based SFT. 
-
-Further gains would likely require: more images, curriculum or hard-negative mining, additional epochs, or prompt refinement. Balance marginal accuracy vs added operational cost.
+## License
+MIT License (see `LICENSE`).
 
 ## Disclaimer
-Costs and pricing are illustrative and may change. Always consult current [Azure OpenAI pricing](https://azure.microsoft.com/en-us/pricing/details/cognitive-services/openai-service/) before large-scale runs.
+Costs and pricing are illustrative and may change. Always consult current [Azure OpenAI pricing](https://azure.microsoft.com/en-us/pricing/details/cognitive-services/openai-service/).
+* Some images triggered content filters (faces / people / CAPTCHA-like patterns); approved modifications via Azure process may be required. Use the [official form](https://customervoice.microsoft.com/Pages/ResponsePage.aspx?id=v4j5cvGGr0GRqy180BHbR7en2Ais5pxKtso_Pz4b1_xUMlBQNkZMR0lFRldORTdVQzQ0TEI5Q1ExOSQlQCN0PWcu) for policy-aligned adjustments.
+* Demo scope only—not production hygiene (secrets rotation, monitoring, retraining pipeline) is shown.
+* Protect API keys and respect data governance policies.
+
